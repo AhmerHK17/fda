@@ -73,3 +73,51 @@ class PSXTicker:
             )
         except Exception as e:
             raise PSXRequestError(f"Failed to fetch historical data: {str(e)}") 
+        
+        def get_dividend_announcements(self, max_results: int = 20) -> pd.DataFrame:
+        """
+        Scrape dividend announcements from PSX financial announcements page.
+        
+        Args:
+            max_results: Max number of dividend records to return
+
+        Returns:
+            DataFrame with dividend announcements for the company
+        """
+        url = 'https://www.psx.com.pk/psx/announcement/financial-announcements'
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+        except Exception as e:
+            raise PSXRequestError(f"Failed to fetch dividend announcements: {str(e)}")
+
+        soup = BeautifulSoup(response.content, 'lxml')
+        table = soup.find('table')
+
+        if not table:
+            raise ValueError("No table found on the PSX announcements page.")
+
+        rows = table.find_all('tr')
+        data = []
+        for row in rows[1:]:  # Skip header
+            cols = row.find_all('td')
+            if len(cols) < 5:
+                continue
+
+            symbol = cols[0].text.strip()
+            announcement_type = cols[2].text.strip()
+            announcement_detail = cols[3].text.strip()
+            date = cols[4].text.strip()
+
+            if self.symbol in symbol and 'Dividend' in announcement_type:
+                data.append({
+                    'Symbol': symbol,
+                    'Type': announcement_type,
+                    'Detail': announcement_detail,
+                    'Date': date
+                })
+
+            if len(data) >= max_results:
+                break
+
+        return pd.DataFrame(data)
